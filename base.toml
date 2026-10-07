@@ -1,0 +1,66 @@
+# ------------------------------------------------------------------
+# Regular environment variables
+# ------------------------------------------------------------------
+[env]
+_.path = ["{{ config_root }}/bin"]
+# Improve history file storage capability
+HISTSIZE = 2000
+HISTFILESIZE = 5000
+# Disable bell sound from 'less' and it's associated/wrapper cmds (like 'man')
+LESS = "$LESS -Q"
+# For better color-coding and visibility of 'ls' output contents #
+LS_COLORS = "$LS_COLORS:ow=30;42:tw=30;42:";
+# Simplify normal user prompt string
+# - bash
+PROMPT_COMMAND = 'echo -ne "\033]0;${PWD}\007"; _mise_hook'
+PS1 = '\[\e[38;2;255;165;0m\]\${debian_chroot:+(\$debian_chroot)}\W\$ \[\e[0m\]'   
+
+# ------------------------------------------------------------------
+# Regular command shortcuts (via aliases/function as per shell)
+# ------------------------------------------------------------------
+### Bash / Zsh / Fish (Native [shell_alias] support)
+[shell_alias]
+# ls display file size as human-readable size
+alias lh='ls -lh'
+
+
+
+[hooks.enter]
+script = """
+dedup_lines ()
+{
+	tac "$1" | awk '!visited[$0]++' | tac > /tmp/nbh
+	mv /tmp/nbh "$1"
+}
+# Deduplicate ~/.bash_history per session in background!
+dedup_lines ~/.bash_history &
+"""
+
+### Powershell (Use hooks and funcs until [shell_alias] is supported)
+shell = "pwsh"
+script = """
+if (-not $global:__mise_func_registry) { $global:__mise_func_registry = @{} }
+$__before = (Get-Command -CommandType Function).Name
+
+------- TODO ------
+function gb     { git branch @args }
+
+# Save diff snapshot of function registry to get func names from this toml
+$__new = (Get-Command -CommandType Function).Name | Where-Object { $__before -notcontains $_ }
+$global:__mise_func_registry[(Get-Location).Path] = $__new
+"""
+
+# ------------------------------------------------------------------
+# Undefine command shortcuts (aliases/function as per shell)
+# ------------------------------------------------------------------
+### Powershell (Use hooks and undeclare funcs until [shell_alias] is supported)
+[hooks.leave]
+shell = "pwsh"
+script = """
+$key = (Get-Location).Path
+# Use previously created diff-snapshot to get list of func names to unset/remove from registry
+if ($global:__mise_func_registry -and $global:__mise_func_registry.ContainsKey($key)) {
+	$global:__mise_func_registry[$key] | ForEach-Object { Remove-Item "function:$_" -Force }
+	$global:__mise_func_registry.Remove($key)
+}
+"""
